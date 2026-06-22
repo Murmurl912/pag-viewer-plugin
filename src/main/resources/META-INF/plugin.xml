@@ -1,0 +1,21 @@
+<idea-plugin>
+    <id>com.github.pagviewer</id>
+    <name>PAG Viewer</name>
+    <vendor email="opensource@example.com">PAG Viewer Contributors</vendor>
+
+    <description><![CDATA[
+        Preview Portable Animated Graphics (.pag) animation files in IntelliJ-based IDEs.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType
+                name="PAG"
+                implementationClass="com.github.pagviewer.file.PagFileType"
+                fieldName="INSTANCE"
+                extensions="pag"/>
+        <fileEditorProvider implementation="com.github.pagviewer.editor.PagFileEditorProvider"/>
+        <postStartupActivity implementation="com.github.pagviewer.editor.PagVerificationOpenActivity"/>
+    </extensions>
+</idea-plugin>
