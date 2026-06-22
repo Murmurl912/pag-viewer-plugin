@@ -2,9 +2,24 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ZIP_PATH="${1:-"$ROOT_DIR/build/distributions/pag-viewer-plugin-0.1.0-SNAPSHOT.zip"}"
+PLUGIN_VERSION="$(awk -F= '/^pluginVersion=/ {print substr($0, index($0, "=") + 1)}' "$ROOT_DIR/gradle.properties")"
+ZIP_PATH="${1:-"$ROOT_DIR/build/distributions/pag-viewer-plugin-${PLUGIN_VERSION}.zip"}"
 SAMPLE_PATH="${2:-"$ROOT_DIR/reference/libpag/web/lite/demo/assets/frames.pag"}"
-PLATFORM_PATH="${PLATFORM_LOCAL_PATH:-"$(awk -F= '/^platformLocalPath=/ {print substr($0, index($0, "=") + 1)}' "$ROOT_DIR/gradle.properties")"}"
+CONFIGURED_PLATFORM_PATH="$(awk -F= '/^platformLocalPath=/ {print substr($0, index($0, "=") + 1)}' "$ROOT_DIR/gradle.properties")"
+PLATFORM_PATH="${PLATFORM_LOCAL_PATH:-"$CONFIGURED_PLATFORM_PATH"}"
+
+if [[ -z "$PLATFORM_PATH" ]]; then
+  for candidate in \
+    "/Applications/Android Studio.app" \
+    "/Applications/IntelliJ IDEA.app" \
+    "$HOME/Applications/IntelliJ IDEA.app"; do
+    if [[ -d "$candidate" ]]; then
+      PLATFORM_PATH="$candidate"
+      break
+    fi
+  done
+fi
+
 PLATFORM_JNA_JAR="$PLATFORM_PATH/Contents/lib/util-8.jar"
 PLATFORM_JNA_NATIVE_DIR="$PLATFORM_PATH/Contents/lib/jna/aarch64"
 

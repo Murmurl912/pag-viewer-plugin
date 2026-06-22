@@ -19,7 +19,7 @@ Native-backed IntelliJ Platform plugin for previewing Portable Animated Graphics
 The plugin ZIP is generated at:
 
 ```text
-build/distributions/pag-viewer-plugin-0.1.0-SNAPSHOT.zip
+build/distributions/pag-viewer-plugin-0.1.0.zip
 ```
 
 ## Verify Packaged Native Decode
@@ -81,7 +81,7 @@ The web viewer writes diagnostics to the browser console with a `[PAG Web]` pref
 1. Open IntelliJ IDEA or Android Studio.
 2. Go to `Settings | Plugins`.
 3. Choose `Install Plugin from Disk...`.
-4. Select `build/distributions/pag-viewer-plugin-0.1.0-SNAPSHOT.zip`.
+4. Select `build/distributions/pag-viewer-plugin-0.1.0.zip`.
 5. Restart the IDE if prompted.
 6. Open a real `.pag` file and confirm preview playback and scrubbing.
 

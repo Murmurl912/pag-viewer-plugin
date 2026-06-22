@@ -2,6 +2,7 @@ package com.github.pagviewer.nativebridge;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 final class FakePagNativeLibrary implements PagNativeLibrary {
     private final AtomicLong handles = new AtomicLong(1);
@@ -10,13 +11,20 @@ final class FakePagNativeLibrary implements PagNativeLibrary {
     private final int frames;
     private final float frameRate;
     private final byte[] pixels;
+    private final boolean[] changedFrames;
+    private final AtomicInteger readFrameCalls = new AtomicInteger();
 
     FakePagNativeLibrary(int width, int height, int frames, float frameRate, byte[] pixels) {
+        this(width, height, frames, frameRate, pixels, null);
+    }
+
+    FakePagNativeLibrary(int width, int height, int frames, float frameRate, byte[] pixels, boolean[] changedFrames) {
         this.width = width;
         this.height = height;
         this.frames = frames;
         this.frameRate = frameRate;
         this.pixels = pixels;
+        this.changedFrames = changedFrames;
     }
 
     @Override
@@ -60,11 +68,21 @@ final class FakePagNativeLibrary implements PagNativeLibrary {
     }
 
     @Override
+    public boolean checkFrameChanged(long decoder, int frameIndex) {
+        return changedFrames == null || changedFrames[Math.floorMod(frameIndex, changedFrames.length)];
+    }
+
+    @Override
     public boolean readFrame(long decoder, int frameIndex, ByteBuffer destination, int rowBytes) {
+        readFrameCalls.incrementAndGet();
         destination.clear();
         destination.put(pixels);
         destination.flip();
         return true;
+    }
+
+    int readFrameCalls() {
+        return readFrameCalls.get();
     }
 
     @Override

@@ -68,6 +68,11 @@ public final class JnaPagNativeLibrary implements PagNativeLibrary {
     }
 
     @Override
+    public boolean checkFrameChanged(long decoder, int frameIndex) {
+        return libPag.pag_decoder_check_frame_changed(pointer(decoder), frameIndex) != 0;
+    }
+
+    @Override
     public boolean readFrame(long decoder, int frameIndex, ByteBuffer destination, int rowBytes) {
         byte result = libPag.pag_decoder_read_frame(
                 pointer(decoder),
@@ -111,6 +116,8 @@ public final class JnaPagNativeLibrary implements PagNativeLibrary {
         int pag_decoder_get_num_frames(Pointer decoder);
 
         float pag_decoder_get_frame_rate(Pointer decoder);
+
+        byte pag_decoder_check_frame_changed(Pointer decoder, int index);
 
         byte pag_decoder_read_frame(
                 Pointer decoder,

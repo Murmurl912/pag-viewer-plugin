@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.github.pagviewer</id>
     <name>PAG Viewer</name>
-    <vendor email="opensource@example.com">PAG Viewer Contributors</vendor>
+    <vendor>PAG Viewer Contributors</vendor>
 
     <description><![CDATA[
         Preview Portable Animated Graphics (.pag) animation files in IntelliJ-based IDEs.

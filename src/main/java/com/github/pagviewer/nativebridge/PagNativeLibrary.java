@@ -22,6 +22,8 @@ public interface PagNativeLibrary {
 
     float frameRate(long decoder);
 
+    boolean checkFrameChanged(long decoder, int frameIndex);
+
     boolean readFrame(long decoder, int frameIndex, ByteBuffer destination, int rowBytes);
 
     void release(long handle);

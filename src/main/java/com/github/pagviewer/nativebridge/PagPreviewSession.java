@@ -1,24 +1,40 @@
 package com.github.pagviewer.nativebridge;
 
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.IntBuffer;
 import java.nio.file.Path;
 
 public final class PagPreviewSession implements AutoCloseable {
+    private static final long DEFAULT_FRAME_CACHE_BUDGET_BYTES = 96L * 1024L * 1024L;
+    private static final int STREAMING_IMAGE_BUFFER_COUNT = 3;
+
     private final PagNativeLibrary nativeLibrary;
     private final long fileHandle;
     private final long decoderHandle;
     private final PagPreviewInfo info;
+    private final int rowBytes;
+    private final ByteBuffer pixelBuffer;
+    private final BufferedImage[] frameCache;
+    private final BufferedImage[] streamingImages;
+    private BufferedImage lastNativeDecodedImage;
+    private BufferedImage lastReturnedImage;
+    private int nextStreamingImage;
     private boolean closed;
 
-    private PagPreviewSession(PagNativeLibrary nativeLibrary, long fileHandle, long decoderHandle, PagPreviewInfo info) {
+    private PagPreviewSession(PagNativeLibrary nativeLibrary, long fileHandle, long decoderHandle, PagPreviewInfo info) throws IOException {
         this.nativeLibrary = nativeLibrary;
         this.fileHandle = fileHandle;
         this.decoderHandle = decoderHandle;
         this.info = info;
+        this.rowBytes = Math.multiplyExact(info.width(), Integer.BYTES);
+        this.pixelBuffer = ByteBuffer
+                .allocateDirect(Math.toIntExact((long) rowBytes * info.height()))
+                .order(ByteOrder.LITTLE_ENDIAN);
+        this.frameCache = shouldCacheFrames(info) ? new BufferedImage[info.frameCount()] : null;
+        this.streamingImages = frameCache == null ? createStreamingImages(info) : null;
     }
 
     public static PagPreviewSession open(
@@ -62,30 +78,56 @@ public final class PagPreviewSession implements AutoCloseable {
         return info;
     }
 
-    public BufferedImage readFrame(int frameIndex) throws IOException {
+    public synchronized PreloadResult preloadFrame(int frameIndex) throws IOException {
+        ensureOpen();
+        if (frameCache == null) {
+            return PreloadResult.UNAVAILABLE;
+        }
+        int safeFrame = Math.floorMod(frameIndex, info.frameCount());
+        if (frameCache[safeFrame] != null) {
+            return PreloadResult.ALREADY_CACHED;
+        }
+        readFrame(safeFrame);
+        return PreloadResult.DECODED;
+    }
+
+    public synchronized BufferedImage readFrame(int frameIndex) throws IOException {
         ensureOpen();
         int safeFrame = Math.floorMod(frameIndex, info.frameCount());
-        int rowBytes = info.width() * Integer.BYTES;
-        ByteBuffer buffer = ByteBuffer
-                .allocateDirect(rowBytes * info.height())
-                .order(ByteOrder.LITTLE_ENDIAN);
-        boolean ok = nativeLibrary.readFrame(decoderHandle, safeFrame, buffer, rowBytes);
+        if (frameCache != null && frameCache[safeFrame] != null) {
+            lastReturnedImage = frameCache[safeFrame];
+            return lastReturnedImage;
+        }
+        if (lastNativeDecodedImage != null
+                && lastReturnedImage == lastNativeDecodedImage
+                && !nativeLibrary.checkFrameChanged(decoderHandle, safeFrame)) {
+            if (frameCache != null) {
+                frameCache[safeFrame] = lastNativeDecodedImage;
+            }
+            lastReturnedImage = lastNativeDecodedImage;
+            return lastReturnedImage;
+        }
+
+        BufferedImage image = nextWritableImage();
+        pixelBuffer.clear();
+        boolean ok = nativeLibrary.readFrame(decoderHandle, safeFrame, pixelBuffer, rowBytes);
         if (!ok) {
             throw new IOException("libpag failed to decode frame " + safeFrame + ".");
         }
 
-        int[] argb = new int[info.width() * info.height()];
-        buffer.position(0);
-        IntBuffer intBuffer = buffer.asIntBuffer();
-        intBuffer.get(argb);
-
-        BufferedImage image = new BufferedImage(info.width(), info.height(), BufferedImage.TYPE_INT_ARGB);
-        image.setRGB(0, 0, info.width(), info.height(), argb, 0, info.width());
+        pixelBuffer.position(0);
+        int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
+        pixelBuffer.asIntBuffer().get(pixels, 0, pixels.length);
+        if (frameCache != null) {
+            frameCache[safeFrame] = image;
+        }
+        lastNativeDecodedImage = image;
+        lastReturnedImage = image;
         return image;
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         if (closed) {
             return;
         }
@@ -98,5 +140,36 @@ public final class PagPreviewSession implements AutoCloseable {
         if (closed) {
             throw new IOException("PAG preview session is closed.");
         }
+    }
+
+    private static boolean shouldCacheFrames(PagPreviewInfo info) {
+        long frameBytes = (long) info.width() * info.height() * Integer.BYTES;
+        long budgetBytes = Long.getLong("pag.viewer.frame.cache.bytes", DEFAULT_FRAME_CACHE_BUDGET_BYTES);
+        return frameBytes > 0
+                && budgetBytes > 0
+                && info.frameCount() <= budgetBytes / frameBytes;
+    }
+
+    private BufferedImage nextWritableImage() {
+        if (streamingImages == null) {
+            return new BufferedImage(info.width(), info.height(), BufferedImage.TYPE_INT_ARGB);
+        }
+        BufferedImage image = streamingImages[nextStreamingImage];
+        nextStreamingImage = (nextStreamingImage + 1) % streamingImages.length;
+        return image;
+    }
+
+    private static BufferedImage[] createStreamingImages(PagPreviewInfo info) {
+        BufferedImage[] images = new BufferedImage[STREAMING_IMAGE_BUFFER_COUNT];
+        for (int index = 0; index < images.length; index++) {
+            images[index] = new BufferedImage(info.width(), info.height(), BufferedImage.TYPE_INT_ARGB);
+        }
+        return images;
+    }
+
+    public enum PreloadResult {
+        DECODED,
+        ALREADY_CACHED,
+        UNAVAILABLE
     }
 }

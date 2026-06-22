@@ -4,7 +4,18 @@ plugins {
 }
 
 group = "com.github.pagviewer"
-version = "0.1.0-SNAPSHOT"
+version = providers.gradleProperty("pluginVersion").get()
+
+val platformLocalPathProvider = providers.gradleProperty("platformLocalPath")
+    .orElse(providers.environmentVariable("PLATFORM_LOCAL_PATH"))
+    .orElse(providers.provider {
+        listOf(
+            "/Applications/Android Studio.app",
+            "/Applications/IntelliJ IDEA.app",
+            "${System.getProperty("user.home")}/Applications/IntelliJ IDEA.app"
+        ).firstOrNull { file(it).isDirectory }
+            ?: error("Set -PplatformLocalPath=/path/to/IDE.app or PLATFORM_LOCAL_PATH=/path/to/IDE.app")
+    })
 
 java {
     toolchain {
@@ -22,7 +33,7 @@ dependencies {
     testRuntimeOnly("junit:junit:4.13.2")
 
     intellijPlatform {
-        local(providers.gradleProperty("platformLocalPath").get())
+        local(platformLocalPathProvider.get())
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }
 }
