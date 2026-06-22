@@ -1,0 +1,70 @@
+name: Build Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build plugin ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        run: ./gradlew --no-daemon -PuseRemotePlatform=true test buildPlugin verifyPluginStructure
+
+      - name: Verify plugin ZIP
+        run: scripts/verify-release-zip.sh
+
+      - name: Read plugin version
+        id: version
+        shell: bash
+        run: |
+          version="$(awk -F= '/^pluginVersion=/ {print substr($0, index($0, "=") + 1)}' gradle.properties)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip_path=build/distributions/pag-viewer-plugin-$version.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pag-viewer-plugin-${{ steps.version.outputs.version }}
+          path: ${{ steps.version.outputs.zip_path }}
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          ZIP_PATH: ${{ steps.version.outputs.zip_path }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ZIP_PATH" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$ZIP_PATH" \
+              --title "$RELEASE_TAG" \
+              --generate-notes
+          fi

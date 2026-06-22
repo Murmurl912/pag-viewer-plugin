@@ -1,0 +1,74 @@
+name: Build Native Runtimes
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux x86_64 libpag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            g++ \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libgl1-mesa-dev \
+            libx11-dev \
+            ninja-build \
+            nodejs \
+            npm \
+            pkg-config \
+            yasm
+
+      - name: Build libpag shared library
+        run: scripts/build-libpag-runtime.sh linux x86_64
+
+      - name: Upload native runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-x86_64
+          path: build/native-runtimes/linux-x86_64/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows x86_64 libpag
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install native build tools
+        shell: pwsh
+        run: choco install yasm -y --no-progress
+
+      - name: Build libpag shared library
+        shell: pwsh
+        run: ./scripts/build-libpag-runtime.ps1 -Arch x64
+
+      - name: Upload native runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows-x86_64
+          path: build/native-runtimes/windows-x86_64/*
+          if-no-files-found: error

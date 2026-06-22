@@ -22,6 +22,17 @@ The plugin ZIP is generated at:
 build/distributions/pag-viewer-plugin-0.1.0.zip
 ```
 
+## GitHub Release Build
+
+The `Build Release` workflow runs on pushes, pull requests, manual dispatches, and `v*` tags. It builds with a downloaded IntelliJ Platform by passing `-PuseRemotePlatform=true`, uploads the plugin ZIP as a workflow artifact, and publishes the ZIP to a GitHub Release when the pushed ref is a tag such as `v0.1.0`.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The `Build Native Runtimes` workflow is manual and experimental. It attempts real Tencent/libpag C-ABI shared-library builds for Linux x86_64 and Windows x86_64 and uploads those native artifacts separately. Once those artifacts are verified on target machines, they can be staged under `src/main/resources/native/linux-x86_64/` and `src/main/resources/native/windows-x86_64/` for a full multi-platform plugin ZIP.
+
 ## Verify Packaged Native Decode
 
 This checks the built ZIP, not just Gradle's source classpath. It extracts the plugin, verifies JNA is not bundled, loads the bundled `libpag.dylib` using the IDE's platform JNA runtime, and decodes libpag's sample PAG file.

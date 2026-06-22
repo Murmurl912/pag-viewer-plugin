@@ -6,16 +6,23 @@ plugins {
 group = "com.github.pagviewer"
 version = providers.gradleProperty("pluginVersion").get()
 
+val requestedRemotePlatformProvider = providers.gradleProperty("useRemotePlatform")
+    .map { it.toBoolean() }
+    .orElse(providers.environmentVariable("USE_REMOTE_PLATFORM").map { it.toBoolean() })
+    .orElse(false)
+
 val platformLocalPathProvider = providers.gradleProperty("platformLocalPath")
     .orElse(providers.environmentVariable("PLATFORM_LOCAL_PATH"))
-    .orElse(providers.provider {
-        listOf(
-            "/Applications/Android Studio.app",
-            "/Applications/IntelliJ IDEA.app",
-            "${System.getProperty("user.home")}/Applications/IntelliJ IDEA.app"
-        ).firstOrNull { file(it).isDirectory }
-            ?: error("Set -PplatformLocalPath=/path/to/IDE.app or PLATFORM_LOCAL_PATH=/path/to/IDE.app")
-    })
+
+val autoDetectedPlatformPathProvider = providers.provider {
+    listOf(
+        "/Applications/Android Studio.app",
+        "/Applications/IntelliJ IDEA.app",
+        "${System.getProperty("user.home")}/Applications/IntelliJ IDEA.app"
+    ).firstOrNull { file(it).isDirectory }
+}
+
+val remotePlatformVersionProvider = providers.gradleProperty("platformVersion")
 
 java {
     toolchain {
@@ -33,7 +40,15 @@ dependencies {
     testRuntimeOnly("junit:junit:4.13.2")
 
     intellijPlatform {
-        local(platformLocalPathProvider.get())
+        val requestedRemotePlatform = requestedRemotePlatformProvider.get()
+        val configuredLocalPath = platformLocalPathProvider.orNull
+        val detectedLocalPath = autoDetectedPlatformPathProvider.orNull
+        when {
+            requestedRemotePlatform -> intellijIdeaCommunity(remotePlatformVersionProvider.get())
+            !configuredLocalPath.isNullOrBlank() -> local(configuredLocalPath)
+            !detectedLocalPath.isNullOrBlank() -> local(detectedLocalPath)
+            else -> intellijIdeaCommunity(remotePlatformVersionProvider.get())
+        }
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }
 }
