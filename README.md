@@ -24,14 +24,12 @@ build/distributions/pag-viewer-plugin-0.1.0.zip
 
 ## GitHub Release Build
 
-The `Build Release` workflow runs on pushes, pull requests, manual dispatches, and `v*` tags. It builds with a downloaded IntelliJ Platform by passing `-PuseRemotePlatform=true`, uploads the plugin ZIP as a workflow artifact, and publishes the ZIP to a GitHub Release when the pushed ref is a tag such as `v0.1.0`.
+The `Build Release` workflow runs on pushes, pull requests, manual dispatches, and `v*` tags. It builds Linux x86_64, Windows x86_64, and macOS x86_64 libpag C-ABI runtimes, stages them alongside the checked-in macOS arm64 runtime, builds with a downloaded IntelliJ Platform by passing `-PuseRemotePlatform=true`, verifies the final ZIP contains every runtime, uploads the plugin ZIP as a workflow artifact, and publishes the ZIP to a GitHub Release when the pushed ref is a tag such as `v0.1.0`.
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
-
-The `Build Native Runtimes` workflow is manual and experimental. It attempts real Tencent/libpag C-ABI shared-library builds for Linux x86_64 and Windows x86_64 and uploads those native artifacts separately. Once those artifacts are verified on target machines, they can be staged under `src/main/resources/native/linux-x86_64/` and `src/main/resources/native/windows-x86_64/` for a full multi-platform plugin ZIP.
 
 ## Verify Packaged Native Decode
 
@@ -98,6 +96,6 @@ The web viewer writes diagnostics to the browser console with a `[PAG Web]` pref
 
 ## Limitations
 
-- Bundled native runtime is currently macOS arm64 only.
-- Windows, Linux, and macOS Intel native packages are not built yet.
+- The source tree only commits the macOS arm64 runtime. The GitHub release workflow builds and stages Windows x86_64, Linux x86_64, and macOS x86_64 runtimes before packaging the release ZIP.
+- Windows/Linux target-machine smoke testing is still needed after the first complete CI release ZIP is produced.
 - Audio playback, editable text/image replacement, layer inspection, timeline markers, and PAGViewer-style profiling are not implemented yet.

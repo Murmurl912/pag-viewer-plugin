@@ -3,6 +3,7 @@ package com.github.pagviewer.nativebridge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
@@ -51,6 +52,40 @@ final class PagNativeLibraryResolverTest {
         );
 
         assertTrue(resolver.resolve().isPresent());
+    }
+
+    @Test
+    void packagedResourceNamesCoverReleaseRuntimeMatrix() {
+        assertEquals(
+                List.of("native/macos-aarch64/libpag.dylib"),
+                PagNativeLibraryResolver.resourceNames("Mac OS X", "aarch64")
+        );
+        assertEquals(
+                List.of("native/macos-x86_64/libpag.dylib"),
+                PagNativeLibraryResolver.resourceNames("Darwin", "x86_64")
+        );
+        assertEquals(
+                List.of("native/linux-x86_64/libpag.so"),
+                PagNativeLibraryResolver.resourceNames("Linux", "amd64")
+        );
+        assertEquals(
+                List.of("native/windows-x86_64/pag.dll", "native/windows-x86_64/libpag.dll"),
+                PagNativeLibraryResolver.resourceNames("Windows 11", "amd64")
+        );
+    }
+
+    @Test
+    void windowsResolverAcceptsLibpagDllBuildOutputAlias() {
+        PagNativeLibraryResolver resolver = new PagNativeLibraryResolver(
+                Map.of(),
+                name -> name.equals("native/windows-x86_64/libpag.dll")
+                        ? Optional.of(Path.of("/tmp/libpag.dll"))
+                        : Optional.empty(),
+                "Windows 11",
+                "amd64"
+        );
+
+        assertEquals(Path.of("/tmp/libpag.dll"), resolver.resolve().orElseThrow());
     }
 
     @Test

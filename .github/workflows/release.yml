@@ -13,9 +13,107 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build plugin ZIP
+  linux-runtime:
+    name: Build Linux x86_64 runtime
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            g++ \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libgl1-mesa-dev \
+            libx11-dev \
+            ninja-build \
+            nodejs \
+            npm \
+            pkg-config \
+            yasm
+
+      - name: Build libpag shared library
+        run: scripts/build-libpag-runtime.sh linux x86_64
+
+      - name: Upload Linux runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-x86_64
+          path: build/native-runtimes/linux-x86_64/libpag.so
+          if-no-files-found: error
+
+  windows-runtime:
+    name: Build Windows x86_64 runtime
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install native build tools
+        shell: pwsh
+        run: choco install yasm -y --no-progress
+
+      - name: Build libpag shared library
+        shell: pwsh
+        run: ./scripts/build-libpag-runtime.ps1 -Arch x64
+
+      - name: Upload Windows runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows-x86_64
+          path: build/native-runtimes/windows-x86_64/pag.dll
+          if-no-files-found: error
+
+  macos-x86_64-runtime:
+    name: Build macOS x86_64 runtime
+    runs-on: macos-13
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install native build tools
+        run: brew install yasm
+
+      - name: Build libpag shared library
+        run: scripts/build-libpag-runtime.sh macos x86_64
+
+      - name: Upload macOS x86_64 runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-x86_64
+          path: build/native-runtimes/macos-x86_64/libpag.dylib
+          if-no-files-found: error
+
+  package:
+    name: Build complete plugin ZIP
+    runs-on: ubuntu-latest
+    needs:
+      - linux-runtime
+      - windows-runtime
+      - macos-x86_64-runtime
 
     steps:
       - name: Check out sources
@@ -32,11 +130,43 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Download Linux runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: native-linux-x86_64
+          path: build/downloaded-runtimes/linux-x86_64
+
+      - name: Download Windows runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: native-windows-x86_64
+          path: build/downloaded-runtimes/windows-x86_64
+
+      - name: Download macOS x86_64 runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: native-macos-x86_64
+          path: build/downloaded-runtimes/macos-x86_64
+
+      - name: Stage complete native runtime set
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p \
+            src/main/resources/native/linux-x86_64 \
+            src/main/resources/native/windows-x86_64 \
+            src/main/resources/native/macos-x86_64
+          cp build/downloaded-runtimes/linux-x86_64/libpag.so src/main/resources/native/linux-x86_64/libpag.so
+          cp build/downloaded-runtimes/windows-x86_64/pag.dll src/main/resources/native/windows-x86_64/pag.dll
+          cp build/downloaded-runtimes/macos-x86_64/libpag.dylib src/main/resources/native/macos-x86_64/libpag.dylib
+          test -f src/main/resources/native/macos-aarch64/libpag.dylib
+          find src/main/resources/native -maxdepth 2 -type f | sort
+
       - name: Build and test
         run: ./gradlew --no-daemon -PuseRemotePlatform=true test buildPlugin verifyPluginStructure
 
       - name: Verify plugin ZIP
-        run: scripts/verify-release-zip.sh
+        run: scripts/verify-release-zip.sh build/distributions/pag-viewer-plugin-$(awk -F= '/^pluginVersion=/ {print substr($0, index($0, "=") + 1)}' gradle.properties).zip macos-aarch64,macos-x86_64,linux-x86_64,windows-x86_64
 
       - name: Read plugin version
         id: version

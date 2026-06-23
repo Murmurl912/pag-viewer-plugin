@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -17,14 +18,32 @@ public final class PagNativeLibraryResolver {
 
     private final Map<String, String> environment;
     private final ResourceLookup resourceLookup;
+    private final String osName;
+    private final String archName;
 
     public PagNativeLibraryResolver() {
-        this(System.getenv(), PagNativeLibraryResolver::extractPackagedLibrary);
+        this(
+                System.getenv(),
+                PagNativeLibraryResolver::extractPackagedLibrary,
+                System.getProperty("os.name"),
+                System.getProperty("os.arch")
+        );
     }
 
     PagNativeLibraryResolver(Map<String, String> environment, ResourceLookup resourceLookup) {
+        this(environment, resourceLookup, System.getProperty("os.name"), System.getProperty("os.arch"));
+    }
+
+    PagNativeLibraryResolver(
+            Map<String, String> environment,
+            ResourceLookup resourceLookup,
+            String osName,
+            String archName
+    ) {
         this.environment = environment;
         this.resourceLookup = resourceLookup;
+        this.osName = osName;
+        this.archName = archName;
     }
 
     public Optional<Path> resolve() {
@@ -38,19 +57,45 @@ public final class PagNativeLibraryResolver {
             return environmentPath;
         }
 
-        return resourceLookup.find(resourceName());
+        for (String resourceName : resourceNames(osName, archName)) {
+            Optional<Path> resourcePath = resourceLookup.find(resourceName);
+            if (resourcePath.isPresent()) {
+                return resourcePath;
+            }
+        }
+        return Optional.empty();
     }
 
     public static String mappedLibraryFileName() {
-        return System.mapLibraryName("pag");
+        return mappedLibraryFileName(System.getProperty("os.name"));
     }
 
     public static String platformDirectory() {
-        return normalizeOs(System.getProperty("os.name")) + "-" + normalizeArch(System.getProperty("os.arch"));
+        return platformDirectory(System.getProperty("os.name"), System.getProperty("os.arch"));
     }
 
-    private static String resourceName() {
-        return "native/" + platformDirectory() + "/" + mappedLibraryFileName();
+    public static List<String> resourceNames(String osName, String archName) {
+        String directory = platformDirectory(osName, archName);
+        String mappedName = mappedLibraryFileName(osName);
+        if (normalizeOs(osName).equals("windows")) {
+            return List.of(
+                    "native/" + directory + "/" + mappedName,
+                    "native/" + directory + "/libpag.dll"
+            );
+        }
+        return List.of("native/" + directory + "/" + mappedName);
+    }
+
+    private static String mappedLibraryFileName(String osName) {
+        return switch (normalizeOs(osName)) {
+            case "macos" -> "libpag.dylib";
+            case "windows" -> "pag.dll";
+            default -> "libpag.so";
+        };
+    }
+
+    private static String platformDirectory(String osName, String archName) {
+        return normalizeOs(osName) + "-" + normalizeArch(archName);
     }
 
     private static Optional<Path> pathFrom(String value) {

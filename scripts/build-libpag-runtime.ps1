@@ -31,6 +31,8 @@ try {
         -DPAG_BUILD_SHARED=ON `
         -DPAG_BUILD_TESTS=OFF `
         -DPAG_BUILD_FRAMEWORK=OFF `
+        -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
+        -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
         -o $BuildOut
 }
 finally {
@@ -45,6 +47,6 @@ if ($null -eq $Library) {
     Write-Error "libpag DLL was not produced under $BuildOut"
 }
 
-Copy-Item $Library.FullName -Destination $OutDir -Force
+Copy-Item $Library.FullName -Destination (Join-Path $OutDir "pag.dll") -Force
 Write-Host "Staged native runtime:"
 Get-ChildItem -Path $OutDir -File | ForEach-Object { $_.FullName }
