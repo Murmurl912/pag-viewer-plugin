@@ -24,7 +24,7 @@ build/distributions/pag-viewer-plugin-0.1.0.zip
 
 ## GitHub Release Build
 
-The `Build Release` workflow runs on pushes to `main`, manual dispatches, and `v*` tags. It computes a native runtime key from the `reference/libpag` submodule commit plus the native build scripts, then looks for a cache release named `native-<key>`. If the matching runtime asset exists, the workflow downloads it; if not, it builds the runtime once and uploads it to that cache release. The final package job stages Linux x86_64, Windows x86_64, macOS x86_64, and the checked-in macOS arm64 runtime, builds with a downloaded IntelliJ Platform by passing `-PuseRemotePlatform=true`, verifies the final ZIP contains every runtime, uploads the plugin ZIP as a workflow artifact, and publishes the ZIP to a GitHub Release when the pushed ref is a tag such as `v0.1.0`.
+The `Build Release` workflow runs on pushes to `main`, manual dispatches, and `v*` tags. It computes a native runtime key from the `reference/libpag` submodule commit plus the native build scripts, then looks for a cache release named `native-<key>`. If the matching runtime asset exists, the workflow downloads it; if not, it builds the runtime once and uploads it to that cache release. The final package job stages Linux x86_64, Windows x86_64, and the checked-in macOS arm64 runtime, builds with a downloaded IntelliJ Platform by passing `-PuseRemotePlatform=true`, verifies the final ZIP contains every runtime, uploads the plugin ZIP as a workflow artifact, and publishes the ZIP to a GitHub Release when the pushed ref is a tag such as `v0.1.0`.
 
 ```bash
 git tag v0.1.0
@@ -96,6 +96,6 @@ The web viewer writes diagnostics to the browser console with a `[PAG Web]` pref
 
 ## Limitations
 
-- The source tree only commits the macOS arm64 runtime. The GitHub release workflow reuses or builds Windows x86_64, Linux x86_64, and macOS x86_64 runtimes before packaging the release ZIP.
+- The source tree only commits the macOS arm64 runtime. The GitHub release workflow reuses or builds Windows x86_64 and Linux x86_64 runtimes before packaging the release ZIP.
 - Windows/Linux target-machine smoke testing is still needed after the first complete CI release ZIP is produced.
 - Audio playback, editable text/image replacement, layer inspection, timeline markers, and PAGViewer-style profiling are not implemented yet.
