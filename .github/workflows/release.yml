@@ -6,16 +6,18 @@ on:
       - main
     tags:
       - "v*"
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  linux-runtime:
-    name: Build Linux x86_64 runtime
+  runtime-key:
+    name: Resolve native runtime key
     runs-on: ubuntu-latest
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+      tag: ${{ steps.key.outputs.tag }}
 
     steps:
       - name: Check out sources
@@ -23,7 +25,75 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Resolve key
+        id: key
+        shell: bash
+        run: |
+          key="$(scripts/native-runtime-key.sh)"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "tag=native-$key" >> "$GITHUB_OUTPUT"
+          echo "Native runtime key: $key"
+
+  runtime-release:
+    name: Ensure native runtime cache release
+    runs-on: ubuntu-latest
+    needs: runtime-key
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Create cache release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ needs.runtime-key.outputs.tag }}
+          RUNTIME_KEY: ${{ needs.runtime-key.outputs.key }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RUNTIME_TAG" >/dev/null 2>&1; then
+            echo "Native runtime cache release exists: $RUNTIME_TAG"
+          else
+            gh release create "$RUNTIME_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Native runtimes $RUNTIME_KEY" \
+              --notes "Cached libpag native runtimes for $RUNTIME_KEY." \
+              --prerelease
+          fi
+
+  linux-runtime:
+    name: Build Linux x86_64 runtime
+    runs-on: ubuntu-latest
+    needs:
+      - runtime-key
+      - runtime-release
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download cached Linux runtime
+        id: cache
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ needs.runtime-key.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="native-linux-x86_64.zip"
+          mkdir -p build/native-cache
+          if gh release download "$RUNTIME_TAG" --pattern "$asset" --dir build/native-cache --clobber; then
+            unzip -q "build/native-cache/$asset" -d build/native-runtimes
+            test -f build/native-runtimes/linux-x86_64/libpag.so
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "Using cached Linux runtime from $RUNTIME_TAG"
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "Linux runtime cache miss for $RUNTIME_TAG"
+          fi
+
       - name: Install native build dependencies
+        if: steps.cache.outputs.hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -40,7 +110,19 @@ jobs:
             yasm
 
       - name: Build libpag shared library
+        if: steps.cache.outputs.hit != 'true'
         run: scripts/build-libpag-runtime.sh linux x86_64
+
+      - name: Publish Linux runtime cache
+        if: steps.cache.outputs.hit != 'true' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ needs.runtime-key.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd build/native-runtimes && zip -qr "$GITHUB_WORKSPACE/native-linux-x86_64.zip" linux-x86_64)
+          gh release upload "$RUNTIME_TAG" native-linux-x86_64.zip --clobber
 
       - name: Upload Linux runtime
         uses: actions/upload-artifact@v4
@@ -52,6 +134,9 @@ jobs:
   windows-runtime:
     name: Build Windows x86_64 runtime
     runs-on: windows-latest
+    needs:
+      - runtime-key
+      - runtime-release
 
     steps:
       - name: Check out sources
@@ -59,18 +144,57 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Download cached Windows runtime
+        id: cache
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ needs.runtime-key.outputs.tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $asset = "native-windows-x86_64.zip"
+          New-Item -ItemType Directory -Force -Path "build/native-cache" | Out-Null
+          try {
+              gh release download $env:RUNTIME_TAG --pattern $asset --dir "build/native-cache" --clobber
+              if ($LASTEXITCODE -ne 0) {
+                  throw "download failed"
+              }
+              Expand-Archive -Path "build/native-cache/$asset" -DestinationPath "build/native-runtimes" -Force
+              if (-not (Test-Path "build/native-runtimes/windows-x86_64/pag.dll")) {
+                  throw "Cached Windows runtime is missing pag.dll"
+              }
+              "hit=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              Write-Host "Using cached Windows runtime from $env:RUNTIME_TAG"
+          } catch {
+              "hit=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              Write-Host "Windows runtime cache miss for $env:RUNTIME_TAG"
+          }
+
       - name: Set up Node.js
+        if: steps.cache.outputs.hit != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Install native build tools
+        if: steps.cache.outputs.hit != 'true'
         shell: pwsh
         run: choco install yasm -y --no-progress
 
       - name: Build libpag shared library
+        if: steps.cache.outputs.hit != 'true'
         shell: pwsh
         run: ./scripts/build-libpag-runtime.ps1 -Arch x64
+
+      - name: Publish Windows runtime cache
+        if: steps.cache.outputs.hit != 'true' && github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ needs.runtime-key.outputs.tag }}
+        run: |
+          Compress-Archive -Path "build/native-runtimes/windows-x86_64" -DestinationPath "native-windows-x86_64.zip" -Force
+          gh release upload $env:RUNTIME_TAG native-windows-x86_64.zip --clobber
 
       - name: Upload Windows runtime
         uses: actions/upload-artifact@v4
@@ -82,6 +206,9 @@ jobs:
   macos-x86_64-runtime:
     name: Build macOS x86_64 runtime
     runs-on: macos-13
+    needs:
+      - runtime-key
+      - runtime-release
 
     steps:
       - name: Check out sources
@@ -89,16 +216,50 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Download cached macOS x86_64 runtime
+        id: cache
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ needs.runtime-key.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="native-macos-x86_64.zip"
+          mkdir -p build/native-cache
+          if gh release download "$RUNTIME_TAG" --pattern "$asset" --dir build/native-cache --clobber; then
+            unzip -q "build/native-cache/$asset" -d build/native-runtimes
+            test -f build/native-runtimes/macos-x86_64/libpag.dylib
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "Using cached macOS x86_64 runtime from $RUNTIME_TAG"
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "macOS x86_64 runtime cache miss for $RUNTIME_TAG"
+          fi
+
       - name: Set up Node.js
+        if: steps.cache.outputs.hit != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Install native build tools
+        if: steps.cache.outputs.hit != 'true'
         run: brew install yasm
 
       - name: Build libpag shared library
+        if: steps.cache.outputs.hit != 'true'
         run: scripts/build-libpag-runtime.sh macos x86_64
+
+      - name: Publish macOS x86_64 runtime cache
+        if: steps.cache.outputs.hit != 'true' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ needs.runtime-key.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd build/native-runtimes && zip -qr "$GITHUB_WORKSPACE/native-macos-x86_64.zip" macos-x86_64)
+          gh release upload "$RUNTIME_TAG" native-macos-x86_64.zip --clobber
 
       - name: Upload macOS x86_64 runtime
         uses: actions/upload-artifact@v4

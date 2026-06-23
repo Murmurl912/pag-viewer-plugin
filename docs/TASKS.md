@@ -27,7 +27,7 @@ Generated from: user request on 2026-06-22
 - [x] **Local macOS native build**: Build or locate a `libpag` dynamic library from the submodule and package it under plugin resources when available. _Reuses: libpag CMake and C ABI._
 - [x] **Native lookup fallback**: Support `-Dpag.viewer.libpag.path=/path/to/libpag` and `PAG_VIEWER_LIBPAG_PATH` for development verification. _Creates: explicit verifier path._
 - [x] **Packaged native reuse**: Reuse the extracted packaged `libpag` path within one IDE process to avoid duplicate native class registration when multiple PAG previews are opened.
-- [x] **GitHub release workflow**: Add CI that builds Linux x86_64, Windows x86_64, and macOS x86_64 libpag C-ABI runtimes, stages them with the checked-in macOS arm64 runtime, builds/tests the plugin with a downloaded IntelliJ Platform, verifies the ZIP contains every runtime, uploads workflow artifacts, and publishes a GitHub Release for `v*` tags.
+- [x] **GitHub release workflow**: Add CI that reuses or builds Linux x86_64, Windows x86_64, and macOS x86_64 libpag C-ABI runtimes keyed by libpag submodule/build-script inputs, stages them with the checked-in macOS arm64 runtime, builds/tests the plugin with a downloaded IntelliJ Platform, verifies the ZIP contains every runtime, uploads workflow artifacts, and publishes a GitHub Release for `v*` tags.
 - [ ] **Target-machine runtime smoke**: After the first complete CI ZIP is produced, verify Windows and Linux IDEs can load the bundled native libraries and decode real PAG files.
 
 ## Review
