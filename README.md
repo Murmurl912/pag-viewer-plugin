@@ -7,6 +7,12 @@
 
 PAG Viewer registers `.pag` as a recognized file type and opens it in a dedicated, native-backed preview editor — so you can play, scrub, and inspect PAG animations without leaving your IDE. Rendering is powered by Tencent's [libpag](https://github.com/Tencent/libpag) through its public C ABI (via JNA); it does **not** rely on JCEF, WebView, or the WASM player.
 
+## Preview
+
+![Preview](docs/assets/pag-viewer-preview.png)
+
+[Demo](docs/assets/pag-viewer-demo.mp4)
+
 ## Features
 
 - **Native PAG playback** — decodes and renders animations with the libpag C library bundled for your platform.
@@ -54,32 +60,13 @@ cd pag-viewer-plugin
 
 The plugin ZIP is written to `build/distributions/pag-viewer-plugin-<version>.zip`.
 
-> **Note:** a local build bundles only the macOS arm64 runtime that ships in the source tree. The complete multi-platform ZIP (macOS arm64 + Linux x86_64 + Windows x86_64) is produced by the GitHub release workflow, which builds or reuses the other runtimes using the helper scripts in [`scripts/`](scripts/). To cut a release, push a `v*` tag:
->
-> ```bash
-> git tag v0.1.0
-> git push origin v0.1.0
-> ```
-
-## Publishing
-
-Release signing and JetBrains Marketplace publishing are handled by the GitHub release workflow for `v*` tags. Configure these repository secrets before cutting a Marketplace release:
-
-- `JB_MARKETPLACE_TOKEN` — JetBrains Marketplace personal access token.
-- `JB_SIGN_PRIVATE_KEY_B64` — base64-encoded `private.pem`.
-- `JB_SIGN_CERTIFICATE_CHAIN_B64` — base64-encoded `chain.crt`.
-- `JB_SIGN_PRIVATE_KEY_PASSWORD` — password for the signing private key.
-
-JetBrains requires the first Marketplace upload for a plugin to be done manually. After that initial plugin page exists, the `v*` tag workflow signs the complete native ZIP, uploads the signed ZIP to the GitHub Release, and runs `publishPlugin` for Marketplace publishing. Marketplace publishing is non-blocking in CI: if JetBrains rejects or delays the upload, the GitHub Release still finishes with the signed ZIP attached.
-
-For the first manual Marketplace upload, use the signed ZIP from the GitHub Release assets, for example `pag-viewer-plugin-0.1.0-signed.zip`. Do not upload the GitHub Actions workflow artifact ZIP directly: GitHub wraps workflow artifacts in an extra ZIP, so that wrapper contains the real plugin ZIP as a nested file and Marketplace rejects it. If you downloaded an Actions artifact, unzip it once and upload the inner `pag-viewer-plugin-<version>-signed.zip`.
+> **Note:** a local build bundles only the macOS arm64 runtime that ships in the source tree. Use the GitHub release ZIP for the complete macOS arm64, Linux x86_64, and Windows x86_64 runtime set.
 
 Run the test suite with `./gradlew test`.
 
 ## Limitations & roadmap
 
 - Native runtimes are bundled for macOS arm64, Linux x86_64, and Windows x86_64. Other targets (e.g. macOS Intel, Linux/Windows arm64) are not yet provided.
-- JetBrains Marketplace publishing is configured in CI, but the first Marketplace upload still has to be performed manually before automated publishing can upload later versions.
 - Not implemented yet: audio playback, editable text/image replacement, layer inspection, timeline markers, PAGViewer-style profiling, and GPU texture rendering.
 
 ## Also in this repo
