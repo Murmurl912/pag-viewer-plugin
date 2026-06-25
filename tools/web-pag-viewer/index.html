@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PAG Web Viewer</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #111315;
+        --panel: #1b1e21;
+        --panel-2: #23272b;
+        --text: #f0f2f3;
+        --muted: #9aa3aa;
+        --line: #343a40;
+        --accent: #6ed0a7;
+        --accent-2: #f2bd5c;
+        --danger: #ff766c;
+        --radius: 6px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.45 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      }
+
+      button,
+      .file-button,
+      input {
+        font: inherit;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        min-width: 0;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        border-right: 1px solid var(--line);
+        background: var(--panel);
+        padding: 16px;
+      }
+
+      main {
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      h1 {
+        margin: 0 0 4px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      h2 {
+        margin: 22px 0 10px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .drop-zone {
+        display: block;
+        margin-top: 16px;
+        border: 1px dashed #55606a;
+        border-radius: var(--radius);
+        padding: 14px;
+        background: #15181b;
+        cursor: pointer;
+      }
+
+      .drop-zone:hover,
+      .drop-zone:focus-within,
+      .drop-zone.drag-over {
+        border-color: var(--accent);
+        background: #18231f;
+        box-shadow: inset 0 0 0 1px rgba(110, 208, 167, 0.35);
+      }
+
+      .drop-zone input {
+        display: none;
+      }
+
+      .button-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      button,
+      .file-button {
+        display: grid;
+        place-items: center;
+        min-height: 36px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel-2);
+        color: var(--text);
+        cursor: pointer;
+        text-align: center;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      button:not(:disabled):hover,
+      .file-button:hover,
+      .file-button:focus-within {
+        border-color: var(--accent);
+      }
+
+      .file-button input {
+        display: none;
+      }
+
+      .primary {
+        background: #1f3b32;
+        border-color: #2d6b55;
+      }
+
+      .metric {
+        display: grid;
+        grid-template-columns: 84px minmax(0, 1fr);
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+      }
+
+      .metric span:first-child {
+        color: var(--muted);
+      }
+
+      .metric span:last-child {
+        overflow-wrap: anywhere;
+      }
+
+      .viewer {
+        display: grid;
+        place-items: center;
+        min-height: 0;
+        overflow: hidden;
+        padding: 24px;
+      }
+
+      .canvas-shell {
+        display: grid;
+        place-items: center;
+        width: min(82vh, 100%);
+        max-width: 920px;
+        aspect-ratio: 1 / 1;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background:
+          linear-gradient(45deg, #16191c 25%, transparent 25%),
+          linear-gradient(-45deg, #16191c 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #16191c 75%),
+          linear-gradient(-45deg, transparent 75%, #16191c 75%),
+          #202428;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+        background-size: 20px 20px;
+        overflow: hidden;
+      }
+
+      canvas {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      .controls {
+        border-top: 1px solid var(--line);
+        background: var(--panel);
+        padding: 14px 20px 18px;
+      }
+
+      .timeline {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: center;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+
+      .status {
+        margin-top: 14px;
+        color: var(--muted);
+      }
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      .playlist {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+
+      .playlist-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .playlist-items {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+        gap: 8px;
+        overflow-y: auto;
+        padding-right: 2px;
+      }
+
+      .playlist-item {
+        display: block;
+        width: 100%;
+        min-height: 38px;
+        justify-items: start;
+        padding: 8px 10px;
+        overflow: hidden;
+        text-align: left;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .playlist-item.active {
+        border-color: var(--accent);
+        background: #1f3b32;
+      }
+
+      .playlist-empty {
+        display: grid;
+        min-height: 90px;
+        place-items: center;
+        border: 1px dashed var(--line);
+        border-radius: var(--radius);
+        color: var(--muted);
+        text-align: center;
+      }
+
+      code {
+        color: var(--accent-2);
+      }
+
+      @media (max-width: 820px) {
+        .app {
+          grid-template-columns: 1fr;
+          height: 100vh;
+        }
+
+        .sidebar {
+          height: auto;
+          min-height: 0;
+          max-height: 46vh;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .playlist {
+          min-height: 96px;
+        }
+
+        .viewer {
+          min-height: 54vh;
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <h1>PAG Viewer</h1>
+        <p class="muted">Open a file, drop a PAG, or load a folder.</p>
+
+        <label class="drop-zone">
+          <input id="pag-file" type="file" accept=".pag" />
+          <strong>Select or drop PAG file</strong>
+          <p class="muted">The file stays in this browser tab.</p>
+        </label>
+
+        <div class="button-row">
+          <button id="sample" type="button">Sample</button>
+          <label class="file-button">
+            <input id="pag-folder" type="file" accept=".pag" webkitdirectory directory multiple />
+            Folder
+          </label>
+          <button id="play-pause" class="primary" type="button" disabled>Play</button>
+          <button id="stop" type="button" disabled>Stop</button>
+        </div>
+
+        <section id="playlist" class="playlist">
+          <div class="playlist-header">
+            <span>Playlist</span>
+            <span id="playlist-count">0 PAG files</span>
+          </div>
+          <div id="playlist-items" class="playlist-items">
+            <div id="playlist-empty" class="playlist-empty">No PAG files loaded</div>
+          </div>
+        </section>
+
+        <h2>Metadata</h2>
+        <div class="metric"><span>File</span><span id="file-name">none</span></div>
+        <div class="metric"><span>Size</span><span id="file-size">-</span></div>
+        <div class="metric"><span>Canvas</span><span id="canvas-size">-</span></div>
+        <div class="metric"><span>Duration</span><span id="duration">-</span></div>
+        <div class="metric"><span>Progress</span><span id="progress-text">0.000</span></div>
+      </aside>
+
+      <main>
+        <section class="viewer">
+          <div class="canvas-shell">
+            <canvas id="pag" width="640" height="640"></canvas>
+          </div>
+        </section>
+        <section class="controls">
+          <div class="timeline">
+            <span>0</span>
+            <input id="progress" type="range" min="0" max="1000" value="0" disabled />
+            <span>1</span>
+          </div>
+          <p id="status" class="status">Loading Web SDK...</p>
+        </section>
+      </main>
+    </div>
+
+    <script type="module">
+      const sdkModuleUrl = "https://cdn.jsdelivr.net/npm/libpag@4.5.3/lib/libpag.esm.js";
+      const sdkBaseUrl = "https://cdn.jsdelivr.net/npm/libpag@4.5.3/lib/";
+      const sampleUrl = "../../reference/libpag/web/lite/demo/assets/frames.pag";
+
+      const state = {
+        PAG: null,
+        view: null,
+        file: null,
+        playlist: [],
+        activePlaylistIndex: -1,
+        duration: 0,
+        playing: false,
+        progressTimer: 0,
+      };
+
+      const els = {
+        canvas: document.getElementById("pag"),
+        file: document.getElementById("pag-file"),
+        folder: document.getElementById("pag-folder"),
+        dropZone: document.querySelector(".drop-zone"),
+        sample: document.getElementById("sample"),
+        playPause: document.getElementById("play-pause"),
+        stop: document.getElementById("stop"),
+        progress: document.getElementById("progress"),
+        status: document.getElementById("status"),
+        fileName: document.getElementById("file-name"),
+        fileSize: document.getElementById("file-size"),
+        canvasSize: document.getElementById("canvas-size"),
+        duration: document.getElementById("duration"),
+        progressText: document.getElementById("progress-text"),
+        playlist: document.getElementById("playlist"),
+        playlistCount: document.getElementById("playlist-count"),
+        playlistItems: document.getElementById("playlist-items"),
+        playlistEmpty: document.getElementById("playlist-empty"),
+      };
+
+      const formatDetail = (detail) => {
+        if (detail === undefined || detail === null) return "";
+        if (typeof detail === "string") return detail;
+        try {
+          return JSON.stringify(detail);
+        } catch (error) {
+          return String(detail);
+        }
+      };
+
+      const logDiagnostic = (message, detail, isError = false) => {
+        const detailText = formatDetail(detail);
+        const consoleMethod = isError ? console.error : console.log;
+        if (detailText) {
+          consoleMethod(`[PAG Web] ${message}`, detail);
+        } else {
+          consoleMethod(`[PAG Web] ${message}`);
+        }
+      };
+
+      const setStatus = (message, isError = false) => {
+        els.status.textContent = message;
+        els.status.classList.toggle("error", isError);
+        logDiagnostic(isError ? "status error" : "status", message, isError);
+      };
+
+      const formatBytes = (bytes) => {
+        if (!Number.isFinite(bytes)) return "-";
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+      };
+
+      const isPagFile = (file) => file && file.name.toLowerCase().endsWith(".pag");
+
+      const displayName = (file) => file.webkitRelativePath || file.name;
+
+      const pagFilesFromList = (files) => Array.from(files || [])
+        .filter(isPagFile)
+        .sort((left, right) => displayName(left).localeCompare(displayName(right)));
+
+      const setDragActive = (active) => {
+        els.dropZone.classList.toggle("drag-over", active);
+      };
+
+      const renderPlaylist = () => {
+        els.playlistCount.textContent = `${state.playlist.length} PAG file${state.playlist.length === 1 ? "" : "s"}`;
+        els.playlistItems.replaceChildren();
+        if (state.playlist.length === 0) {
+          els.playlistItems.append(els.playlistEmpty);
+          return;
+        }
+        state.playlist.forEach((file, index) => {
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = `playlist-item${index === state.activePlaylistIndex ? " active" : ""}`;
+          item.textContent = displayName(file);
+          item.title = displayName(file);
+          item.addEventListener("click", async () => {
+            logDiagnostic("playlist item clicked", { index, name: displayName(file), size: file.size });
+            await loadPlaylistIndex(index);
+          });
+          els.playlistItems.append(item);
+        });
+      };
+
+      const setPlaylist = (files) => {
+        state.playlist = files;
+        state.activePlaylistIndex = files.length > 0 ? 0 : -1;
+        renderPlaylist();
+      };
+
+      const loadPlaylistIndex = async (index) => {
+        const file = state.playlist[index];
+        if (!file) return;
+        state.activePlaylistIndex = index;
+        renderPlaylist();
+        await loadUserFile(file, "playlist file selected");
+      };
+
+      const loadUserFile = async (file, reason) => {
+        if (!file) return;
+        if (!isPagFile(file)) {
+          logDiagnostic("drop rejected", { name: file.name, reason: "not a .pag file" }, true);
+          setStatus("Drop a .pag file.", true);
+          return;
+        }
+        logDiagnostic(reason, { name: file.name, size: file.size });
+        await loadPag(file, file.name, file.size);
+      };
+
+      const destroyView = () => {
+        window.clearInterval(state.progressTimer);
+        state.progressTimer = 0;
+        if (state.view) {
+          logDiagnostic("destroy view", {
+            file: els.fileName.textContent,
+            progress: state.view.getProgress(),
+          });
+          state.view.destroy();
+        }
+        state.view = null;
+        state.file = null;
+        state.playing = false;
+        els.playPause.textContent = "Play";
+        els.playPause.disabled = true;
+        els.stop.disabled = true;
+        els.progress.disabled = true;
+      };
+
+      const syncProgress = () => {
+        if (!state.view) return;
+        const progress = state.view.getProgress();
+        els.progress.value = String(Math.round(progress * 1000));
+        els.progressText.textContent = progress.toFixed(3);
+      };
+
+      const startProgressTimer = () => {
+        window.clearInterval(state.progressTimer);
+        state.progressTimer = window.setInterval(syncProgress, 80);
+      };
+
+      const startPlayback = async (reason) => {
+        if (!state.view || state.playing) return;
+        await state.view.play();
+        state.playing = true;
+        els.playPause.textContent = "Pause";
+        logDiagnostic(reason === "auto loop" ? "auto loop playback started" : "playback started", {
+          progress: state.view.getProgress(),
+        });
+      };
+
+      const pausePlayback = async () => {
+        if (!state.view || !state.playing) return;
+        await state.view.pause();
+        state.playing = false;
+        els.playPause.textContent = "Play";
+        syncProgress();
+        logDiagnostic("playback paused", { progress: state.view.getProgress() });
+      };
+
+      const loadPag = async (source, name, size) => {
+        try {
+          if (!state.PAG) {
+            logDiagnostic("load ignored", "Web SDK is still loading");
+            setStatus("Web SDK is still loading...");
+            return;
+          }
+
+          logDiagnostic("load requested", { name, size });
+          setStatus(`Loading ${name}...`);
+          destroyView();
+
+          const pagFile = await state.PAG.PAGFile.load(source);
+          logDiagnostic("pag file decoded", {
+            name,
+            width: pagFile.width(),
+            height: pagFile.height(),
+            duration: pagFile.duration(),
+            frameRate: pagFile.frameRate(),
+          });
+          els.canvas.width = pagFile.width();
+          els.canvas.height = pagFile.height();
+
+          const pagView = await state.PAG.PAGView.init(pagFile, els.canvas);
+          pagView.setRepeatCount(0);
+          logDiagnostic("auto loop enabled", { repeatCount: 0 });
+          logDiagnostic("pag view initialized", {
+            canvas: `${els.canvas.width}x${els.canvas.height}`,
+          });
+          state.file = pagFile;
+          state.view = pagView;
+          state.duration = pagFile.duration();
+
+          els.fileName.textContent = name;
+          els.fileSize.textContent = formatBytes(size);
+          els.canvasSize.textContent = `${pagFile.width()} x ${pagFile.height()}`;
+          els.duration.textContent = `${state.duration} us`;
+          els.progress.value = "0";
+          els.progressText.textContent = "0.000";
+          els.playPause.disabled = false;
+          els.stop.disabled = false;
+          els.progress.disabled = false;
+
+          await pagView.flush();
+          logDiagnostic("first frame flushed", { name });
+          startProgressTimer();
+          await startPlayback("auto loop");
+          setStatus(`Playing: ${name}`);
+        } catch (error) {
+          destroyView();
+          const message = error instanceof Error ? error.message : String(error);
+          logDiagnostic("load failed", message, true);
+          setStatus(message, true);
+        }
+      };
+
+      const loadSample = async () => {
+        logDiagnostic("sample fetch started", sampleUrl);
+        const response = await fetch(sampleUrl);
+        if (!response.ok) throw new Error(`Sample fetch failed: ${response.status}`);
+        const buffer = await response.arrayBuffer();
+        logDiagnostic("sample fetch completed", { bytes: buffer.byteLength });
+        await loadPag(buffer, "frames.pag", buffer.byteLength);
+      };
+
+      const initSdk = async () => {
+        try {
+          logDiagnostic("sdk module import started", sdkModuleUrl);
+          const sdkModule = await import(sdkModuleUrl);
+          logDiagnostic("sdk module import completed", Object.keys(sdkModule));
+          logDiagnostic("sdk init started", sdkBaseUrl);
+          state.PAG = await sdkModule.PAGInit({
+            locateFile: (file) => `${sdkBaseUrl}${file}`,
+          });
+          logDiagnostic("sdk init completed", { version: state.PAG.SDKVersion() });
+          setStatus(`Web SDK ready: ${state.PAG.SDKVersion()}`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logDiagnostic("sdk init failed", message, true);
+          setStatus(message, true);
+        }
+      };
+
+      els.file.addEventListener("change", async () => {
+        const file = els.file.files && els.file.files[0];
+        await loadUserFile(file, "file selected");
+      });
+
+      els.folder.addEventListener("change", async () => {
+        const files = pagFilesFromList(els.folder.files);
+        logDiagnostic("folder selected", {
+          totalFiles: els.folder.files ? els.folder.files.length : 0,
+          pagFiles: files.length,
+        });
+        setPlaylist(files);
+        if (files.length === 0) {
+          setStatus("No .pag files found in that folder.", true);
+          return;
+        }
+        await loadPlaylistIndex(0);
+      });
+
+      document.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "copy";
+        }
+        setDragActive(true);
+      });
+
+      document.addEventListener("dragleave", (event) => {
+        if (!event.relatedTarget) {
+          setDragActive(false);
+        }
+      });
+
+      document.addEventListener("drop", async (event) => {
+        event.preventDefault();
+        setDragActive(false);
+        const file = event.dataTransfer?.files?.[0];
+        await loadUserFile(file, "drop file selected");
+      });
+
+      els.sample.addEventListener("click", async () => {
+        try {
+          logDiagnostic("sample button clicked");
+          await loadSample();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logDiagnostic("sample load failed", message, true);
+          setStatus(message, true);
+        }
+      });
+
+      els.playPause.addEventListener("click", async () => {
+        if (!state.view) return;
+        if (state.playing) {
+          await pausePlayback();
+        } else {
+          await startPlayback("manual");
+        }
+      });
+
+      els.stop.addEventListener("click", async () => {
+        if (!state.view) return;
+        await state.view.stop();
+        state.playing = false;
+        els.playPause.textContent = "Play";
+        syncProgress();
+        logDiagnostic("playback stopped", { progress: state.view.getProgress() });
+      });
+
+      els.progress.addEventListener("input", async () => {
+        if (!state.view) return;
+        const progress = Number(els.progress.value) / 1000;
+        await state.view.setProgress(progress);
+        await state.view.flush();
+        syncProgress();
+        logDiagnostic("scrub flushed", { progress: state.view.getProgress() });
+      });
+
+      window.addEventListener("error", (event) => {
+        logDiagnostic("window error", event.message, true);
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        logDiagnostic("unhandled rejection", event.reason instanceof Error ? event.reason.message : String(event.reason), true);
+      });
+      window.addEventListener("beforeunload", destroyView);
+      void initSdk();
+    </script>
+  </body>
+</html>
