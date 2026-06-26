@@ -8,11 +8,14 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.IconDeferrer
-import com.intellij.ui.scale.JBUIScale
-import com.intellij.util.JBHiDPIScaledImage
-import com.intellij.util.ui.JBImageIcon
+import java.awt.Component
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.GraphicsEnvironment
+import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import javax.swing.Icon
+import kotlin.math.ceil
 
 class PagThumbnailIconProvider : FileIconProvider {
     override fun getIcon(file: VirtualFile, flags: Int, project: Project?): Icon? {
@@ -41,11 +44,10 @@ class PagThumbnailIconProvider : FileIconProvider {
             LOG.debug("PAG thumbnail read failed: ${file.path}", throwable)
             return null
         }
-        val logical = JBUIScale.scale(BASE_ICON_PX)
-        val devicePx = maxOf(1, Math.ceil(logical * JBUIScale.sysScale().toDouble()).toInt())
+        val logical = BASE_ICON_PX
+        val devicePx = thumbnailDeviceSize(logical)
         val image: BufferedImage = PagThumbnailGenerator.generate(nativeLibrary, bytes, path, devicePx) ?: return null
-        val hiDpi = JBHiDPIScaledImage(image, logical, logical, BufferedImage.TYPE_INT_ARGB)
-        return JBImageIcon(hiDpi)
+        return PagThumbnailIcon(image, logical)
     }
 
     companion object {
@@ -65,6 +67,47 @@ class PagThumbnailIconProvider : FileIconProvider {
                 return false
             }
             return file.length in 1..MAX_FILE_BYTES
+        }
+
+        fun thumbnailDeviceSize(logicalPx: Int, deviceScale: Double = currentDeviceScale()): Int =
+            maxOf(logicalPx, ceil(logicalPx * deviceScale).toInt())
+
+        private fun currentDeviceScale(): Double {
+            if (GraphicsEnvironment.isHeadless()) {
+                return 1.0
+            }
+            return try {
+                GraphicsEnvironment.getLocalGraphicsEnvironment()
+                    .defaultScreenDevice
+                    .defaultConfiguration
+                    .defaultTransform
+                    .scaleX
+                    .coerceAtLeast(1.0)
+            } catch (_: Throwable) {
+                1.0
+            }
+        }
+    }
+
+    private class PagThumbnailIcon(
+        private val image: BufferedImage,
+        private val logicalSize: Int
+    ) : Icon {
+        override fun getIconWidth(): Int = logicalSize
+
+        override fun getIconHeight(): Int = logicalSize
+
+        override fun paintIcon(component: Component?, graphics: Graphics, x: Int, y: Int) {
+            val graphics2D = graphics.create() as Graphics2D
+            try {
+                graphics2D.setRenderingHint(
+                    RenderingHints.KEY_INTERPOLATION,
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR
+                )
+                graphics2D.drawImage(image, x, y, logicalSize, logicalSize, null)
+            } finally {
+                graphics2D.dispose()
+            }
         }
     }
 }
