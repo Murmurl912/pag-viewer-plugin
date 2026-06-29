@@ -60,7 +60,7 @@ internal class ToggleToolbarIcon private constructor(
         val top = y + JBUI.scale(5)
         val gridSize = size - JBUI.scale(10)
         val step = gridSize / 3
-        graphics2D.stroke = BasicStroke(JBUI.scale(1.35f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        graphics2D.stroke = BasicStroke(JBUI.scale(135) / 100f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         graphics2D.color = withAlpha(foreground(component), if (active) 230 else 175)
         for (index in 0..3) {
             val offset = index * step
